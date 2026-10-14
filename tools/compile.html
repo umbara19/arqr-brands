@@ -11,8 +11,8 @@
   const loadImage = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
   window.compileDone = false;
   try {
-    const catalog = await (await fetch('../models/products.json')).json();
-    const images = await Promise.all(catalog.products.map((p) => loadImage(`../cards/Card_${p.id}.png`)));
+    const catalog = await (await fetch(`../models/products.json?v=${Date.now()}`)).json();
+    const images = await Promise.all(catalog.products.map((p) => loadImage(`../cards/Card_${p.id}.png?v=${Date.now()}`)));
     const compiler = new window.MINDAR.IMAGE.Compiler();
     await compiler.compileImageTargets(images, (progress) => log(`Compile ${progress.toFixed(1)}%`));
     const buffer = await compiler.exportData();
