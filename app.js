@@ -1,5 +1,5 @@
 // ARQR Brands · WebAR
-// MindAR melacak 5 kartu (targets.mind, urutan sama dengan models/products.json).
+// MindAR melacak 6 kartu (targets.mind, urutan sama dengan models/products.json).
 // Model .glb diekspor dari project Unity; animasinya dibuat ulang di sini dengan parameter yang sama.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -75,7 +75,6 @@ class ProductRig {
     if (e.type === 'LinkWave') {
       base.links = e.links.map((n) => this.root.getObjectByName(n)).filter(Boolean).map((l) => ({ l, q: l.quaternion.clone() }));
     }
-    if (e.type === 'BallBounce') base.ball = this.root.getObjectByName(e.ball);
     if (e.type === 'Pulse') {
       base.mats = [];
       node.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); base.mats.push(o.material); } });
@@ -112,12 +111,6 @@ class ProductRig {
 
 function runEffect(e, dt, time) {
   switch (e.type) {
-    case 'RunBounce': {
-      const ph = time * e.stepsPerSecond * Math.PI * 2;
-      e.node.position.copy(e.pos).addScaledVector(Y, Math.abs(Math.sin(ph)) * e.hopHeight);
-      e.node.quaternion.copy(e.quat).multiply(qAxis(Z, Math.cos(ph) * e.pitchAngle * DEG));
-      break;
-    }
     case 'Pendulum':
       e.node.quaternion.copy(e.quat).multiply(qAxis(Z, Math.sin(time * e.frequency * Math.PI * 2) * e.angle * DEG));
       break;
@@ -127,13 +120,12 @@ function runEffect(e, dt, time) {
         l.quaternion.copy(q).multiply(qAxis(X, -ang * DEG));
       });
       break;
-    case 'BallBounce': {
-      const phase = (time * e.bouncesPerSecond) % 1;
-      const h = 4 * phase * (1 - phase);
-      const s = e.squash * Math.max(0, Math.min(1, 1 - h * 6));
-      e.node.position.copy(e.pos).addScaledVector(Y, h * e.height);
-      e.node.scale.set(e.scale.x * (1 + s * 0.6), e.scale.y * (1 - s), e.scale.z * (1 + s * 0.6));
-      if (e.ball) e.ball.rotateOnAxis(X, -e.rollSpeed * DEG * dt);
+    case 'LockClick': {
+      // sama dengan LockClick.Open01 di Unity: tertahan saat terkunci & terbuka
+      const p = (time * e.cyclesPerSecond) % 1;
+      let s = 0.5 - 0.5 * Math.cos(p * Math.PI * 2);
+      s = Math.max(0, Math.min(1, (s - 0.25) / 0.5));
+      e.node.position.copy(e.pos).addScaledVector(Y, e.lift * s * s * (3 - 2 * s));
       break;
     }
     case 'Pulse': {
@@ -317,7 +309,7 @@ async function startPreview() {
     renderer.setSize(innerWidth, innerHeight);
     camera.aspect = innerWidth / innerHeight;
     // muat kelima kartu di layar (portrait HP maupun laptop)
-    const dist = Math.max(4, 8.4 / camera.aspect);
+    const dist = Math.max(4.6, 10 / camera.aspect);
     camera.position.set(0, dist * 0.42, dist * 0.92);
     camera.lookAt(0, 0.35, 0);
     camera.updateProjectionMatrix();
