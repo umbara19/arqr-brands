@@ -103,3 +103,6 @@ button:disabled { opacity: 0.55; cursor: progress; }
 
 /* sembunyikan overlay bawaan MindAR yang tidak dipakai */
 .mindar-ui-overlay.mindar-ui-loading { display: none !important; }
+
+.cards-link { color: var(--tiffany); text-decoration: none; font-weight: 600; }
+.cards-link:hover { text-decoration: underline; }
