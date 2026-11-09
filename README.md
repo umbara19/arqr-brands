@@ -17,6 +17,10 @@ website terbuka, lalu animasi 3D muncul di atas kartu. Tidak perlu install aplik
 
 Cetak kartunya (sekitar 10–12 cm) atau tampilkan di layar lain, lalu scan QR-nya dengan kamera HP.
 
+**Versi scan gambar (tanpa QR):** https://umbara19.github.io/arqr-brands/foto/
+Folder `foto/`: 6 gambar produk (`foto/cards/Foto_<id>.png`, render dari model 3D yang sama) sebagai target AR,
+`foto/targets.mind`, dan PDF `foto/cards/Kartu-Foto-Tiffany-A4.pdf`. Model & animasi memakai folder `models/` yang sama.
+
 ## Isi
 
 - `index.html`, `app.js`, `style.css`: halaman WebAR (MindAR 1.2.5 + three.js 0.160 dari CDN).
