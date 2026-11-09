@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>Tes deteksi targets.mind</title>
+<style>body{font-family:system-ui;background:#111;color:#eee;padding:24px}td,th{padding:4px 10px;text-align:left}</style></head>
+<body>
+<h1>Tes deteksi (simulasi kamera)</h1>
+<p id="log">Menyiapkan…</p>
+<table id="out"></table>
+<script type="module">
+  // Pakai: test.html?mind=../targets.mind&img=../cards/Foto_  (atau mind=../../targets.mind&img=../../cards/Card_)
+  // Tiap gambar digambar ke "frame kamera" 640x480 (kecil, miring, agak gelap/blur), lalu dicocokkan ke semua target.
+  import 'https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js';
+  const q = new URLSearchParams(location.search);
+  const log = (t) => (document.getElementById('log').textContent = t);
+  const loadImage = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+  const catalog = await (await fetch(q.get('catalog') || '../../models/products.json')).json();
+  const ids = catalog.products.map((p) => p.id);
+  const W = 640, H = 480;
+  const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const controller = new window.MINDAR.IMAGE.Controller({ inputWidth: W, inputHeight: H, maxTrack: 1 });
+  await controller.addImageTargets(q.get('mind'));
+  const views = [
+    { name: 'dekat, lurus', size: 380, rot: 0, filter: 'none' },
+    { name: 'sedang, miring 15°', size: 280, rot: 15, filter: 'brightness(0.85) blur(0.6px)' },
+    { name: 'jauh, miring -10°', size: 210, rot: -10, filter: 'brightness(0.75) contrast(0.9) blur(0.8px)' },
+    // kondisi sulit: kecil, buram, redup, kontras rendah, dilihat miring (perspektif) + noise kamera
+    { name: 'SULIT: jauh+buram+redup', size: 170, rot: 8, sy: 0.75, filter: 'brightness(0.6) contrast(0.7) blur(1.3px)', noise: 18 },
+    { name: 'SULIT: miring kuat+silau', size: 240, rot: -20, sy: 0.6, filter: 'brightness(1.25) contrast(0.65) blur(1px)', noise: 14 },
+  ];
+  const results = [];
+  let total = 0, ok = 0;
+  for (let i = 0; i < ids.length; i++) {
+    const img = await loadImage(`${q.get('img')}${ids[i]}.png?v=${Date.now()}`);
+    for (const v of views) {
+      ctx.filter = 'none'; ctx.fillStyle = '#6b6158'; ctx.fillRect(0, 0, W, H);
+      ctx.save(); ctx.translate(W / 2, H / 2); ctx.rotate(v.rot * Math.PI / 180); ctx.filter = v.filter;
+      ctx.scale(1, v.sy || 1);
+      ctx.drawImage(img, -v.size / 2, -v.size / 2, v.size, v.size); ctx.restore();
+      if (v.noise) {
+        const d = ctx.getImageData(0, 0, W, H);
+        let s = 1234567;
+        for (let k = 0; k < d.data.length; k += 4) {
+          s = (s * 1103515245 + 12345) & 0x7fffffff;
+          const n = ((s / 0x7fffffff) - 0.5) * 2 * v.noise;
+          d.data[k] += n; d.data[k + 1] += n; d.data[k + 2] += n;
+        }
+        ctx.putImageData(d, 0, 0);
+      }
+      const { featurePoints } = await controller.detect(canvas);
+      let best = -1;
+      for (let t = 0; t < ids.length; t++) {
+        const { modelViewTransform } = await controller.match(featurePoints, t);
+        if (modelViewTransform) { best = t; if (t === i) break; }
+      }
+      total++; if (best === i) ok++;
+      results.push([ids[i], v.name, featurePoints.length, best === i ? 'OK' : best < 0 ? 'TIDAK TERDETEKSI' : 'SALAH: ' + ids[best]]);
+      log(`${total} / ${ids.length * views.length}`);
+    }
+  }
+  document.getElementById('out').innerHTML = '<tr><th>gambar</th><th>kondisi</th><th>fitur</th><th>hasil</th></tr>' +
+    results.map((r) => `<tr><td>${r.join('</td><td>')}</td></tr>`).join('');
+  log(`Selesai: ${ok}/${total} berhasil`);
+  window.testResult = { ok, total, results };
+</script>
+</body></html>
