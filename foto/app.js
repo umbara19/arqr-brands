@@ -179,7 +179,11 @@ async function startAR() {
   const mindar = new MindARThree({
     container: $('ar'),
     imageTargetSrc: 'targets.mind',
-    maxTrack: 2,
+    // Satu gambar dalam satu waktu. warmupTolerance: gambar harus terkunci beberapa frame berturut-turut
+    // sebelum produknya muncul, supaya deteksi salah sesaat tidak memunculkan produk lain.
+    maxTrack: 1,
+    warmupTolerance: 8,
+    missTolerance: 6,
     uiLoading: 'no',
     uiScanning: 'no',
     uiError: 'no',
@@ -212,8 +216,18 @@ async function startAR() {
 
     const rig = new ProductRig(p, obj);
     rigs.push(rig);
-    anchor.onTargetFound = () => { rig.show(); visible.push(p); updateHud(visible); };
-    anchor.onTargetLost = () => { rig.hide(); visible.splice(visible.indexOf(p), 1); updateHud(visible); };
+    // Hanya 1 produk tampil: produk lain langsung disembunyikan saat gambar baru terdeteksi.
+    anchor.onTargetFound = () => {
+      for (const other of rigs) if (other !== rig) other.hide();
+      visible.length = 0;
+      rig.show(); visible.push(p); updateHud(visible);
+    };
+    anchor.onTargetLost = () => {
+      rig.hide();
+      const k = visible.indexOf(p);
+      if (k >= 0) visible.splice(k, 1);
+      updateHud(visible);
+    };
   });
 
   try {
@@ -222,6 +236,7 @@ async function startAR() {
     showError(err);
     return;
   }
+  pickBestTarget(mindar.controller);
 
   const clock = new THREE.Clock();
   renderer.setAnimationLoop(() => {
@@ -230,6 +245,30 @@ async function startAR() {
     for (const r of rigs) r.update(dt, time);
     renderer.render(scene, camera);
   });
+}
+
+/**
+ * Perbaikan salah kenal gambar. Bawaan MindAR 1.2.5 mencocokkan target berurutan dan langsung memakai
+ * target PERTAMA yang lolos, sehingga gambar ke-5 bisa dikira gambar ke-1 (produk lain yang muncul).
+ * Di sini semua kandidat dicek, masing-masing diberi skor = jumlah titik yang benar-benar terlacak
+ * dengan pose tersebut, lalu dipilih skor tertinggi. Diuji dengan foto/tools/test.html?pick=best.
+ */
+function pickBestTarget(controller) {
+  controller._detectAndMatch = async function (inputT, targetIndexes) {
+    const { featurePoints } = this.cropDetector.detectMoving(inputT);
+    let best = { targetIndex: -1, modelViewTransform: null };
+    let bestScore = 3; // syarat tracking MindAR: minimal 4 titik
+    for (const index of targetIndexes) {
+      const { modelViewTransform } = await this._workerMatch(featurePoints, [index]);
+      if (!modelViewTransform) continue;
+      const score = this.tracker.track(inputT, modelViewTransform, index).worldCoords.length;
+      if (score > bestScore) {
+        bestScore = score;
+        best = { targetIndex: index, modelViewTransform };
+      }
+    }
+    return best;
+  };
 }
 
 function updateHud(visible) {

@@ -48,13 +48,27 @@
         ctx.putImageData(d, 0, 0);
       }
       const { featurePoints } = await controller.detect(canvas);
-      let best = -1;
+      // cocokkan ke SEMUA target: target lain yang ikut cocok = salah kenal
+      const hits = [];
       for (let t = 0; t < ids.length; t++) {
         const { modelViewTransform } = await controller.match(featurePoints, t);
-        if (modelViewTransform) { best = t; if (t === i) break; }
+        if (modelViewTransform) hits.push(t);
       }
-      total++; if (best === i) ok++;
-      results.push([ids[i], v.name, featurePoints.length, best === i ? 'OK' : best < 0 ? 'TIDAK TERDETEKSI' : 'SALAH: ' + ids[best]]);
+      // Skor tiap kandidat = jumlah titik yang berhasil dilacak (template) dengan pose hasil match.
+      // Mode ?pick=best meniru perbaikan di app.js: pilih skor tertinggi, bukan kandidat pertama.
+      const scores = [];
+      for (const t of hits) {
+        const { modelViewTransform } = await controller.match(featurePoints, t);
+        const { worldCoords } = modelViewTransform ? await controller.track(canvas, modelViewTransform, t) : { worldCoords: [] };
+        scores.push([t, worldCoords.length]);
+      }
+      const chosen = q.get('pick') === 'best'
+        ? (scores.filter((s) => s[1] >= 4).sort((a, b) => b[1] - a[1])[0] || [-1])[0]
+        : (hits.length ? Math.min(...hits) : -1);
+      total++; if (chosen === i) ok++;
+      results.push([ids[i], v.name, featurePoints.length,
+        (chosen === i ? 'OK' : chosen < 0 ? 'TIDAK TERDETEKSI' : 'SALAH → ' + ids[chosen]) + '  skor: ' +
+        scores.map(([t, n]) => `${t === i ? '*' : ''}${t + 1}=${n}`).join(' ')]);
       log(`${total} / ${ids.length * views.length}`);
     }
   }
